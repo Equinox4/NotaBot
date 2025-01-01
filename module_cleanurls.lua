@@ -18,7 +18,7 @@ local wrap = coroutine.wrap
 ]]
 
 
-Module.Name = "clean_urls"
+Module.Name = "cleanurls"
 
 
 function Module:GetConfigTable()
