@@ -79,6 +79,37 @@ function Webhook:setAvatar(avatar)
 end
 
 --[=[
+@m editMessage
+@t http
+@r boolean
+@d Edit a webhook message
+]=]
+function Webhook:editMessage(message_id, payload, query)
+	return self.client._api:editWebhookMessage(self._id, self._token, message_id, payload, query)
+end
+
+--[=[
+@m execute
+@t http
+@r boolean
+@d Send a webhook message
+]=]
+function Webhook:execute(payload, query, files)
+	return self.client._api:executeWebhook(self._id, self._token, payload, query, files)
+end
+
+
+--[=[
+@m getMessage
+@t http
+@r Message
+@d Get a webhook message
+]=]
+function Webhook:getMessage(message_id, query)
+	return self.client._api:getWebhookMessage(self._id, self._token, message_id, query)
+end
+
+--[=[
 @m delete
 @t http
 @r boolean
