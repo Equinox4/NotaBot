@@ -432,7 +432,7 @@ function table.binsearch( tbl, value, comp )
 	return nil, iStart, iEnd
 end
 
-function table.length( tbl )
+function table.length(tbl)
 	local count = 0
 
 	for _ in pairs(tbl) do
@@ -440,6 +440,16 @@ function table.length( tbl )
 	end
 
 	return count
+end
+
+function table.map(tbl, f)
+	local t = {}
+
+	for k, v in pairs(tbl) do
+		t[k] = f(v)
+	end
+
+	return t
 end
 
 function table.wrap(value)
@@ -457,4 +467,40 @@ function Set(list)
 		set[val] = true
 	end
 	return set
+end
+
+util.ansiColoursFg = {
+	reset   = 0,
+	black   = 30,
+	red     = 31,
+	green   = 32,
+	yellow  = 33,
+	blue    = 34,
+	magenta = 35,
+	cyan    = 36,
+	white   = 37,
+}
+
+util.ansiColoursBg = {
+	reset   = 0,
+	black   = 40,
+	red     = 41,
+	green   = 42,
+	yellow  = 43,
+	blue    = 44,
+	magenta = 45,
+	cyan    = 46,
+	white   = 47,
+}
+
+function string.colour(str, fgcolour, bgcolour)
+	if fgcolour == nil then
+		return str
+	end
+
+	if bgcolour == nil then
+		bgcolour = util.ansiColoursBg["reset"]
+	end
+
+	return string.format("\x1b[%d;%dm%s\x1b[0m", bgcolour, fgcolour, str)
 end
