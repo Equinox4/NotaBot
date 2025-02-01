@@ -1,8 +1,13 @@
-local prefix = Config.Prefix
+local Bot = Bot
+local Client = Client
+local Config = Config
+local Discordia = Discordia
+
+local ansiColoursFg = util.ansiColoursFg
 local enums = Discordia.enums
 local http = require("coro-http")
+local prefix = Config.Prefix
 local sha256 = require('sha256').sha256
-local ansiColoursFg = util.ansiColoursFg
 
 --[[
 	This module is used to clean URLs from unwanted tracking (or, depending of guild configuration, any) query
