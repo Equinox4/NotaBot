@@ -390,10 +390,6 @@ function Module:OnMessageCreate(message)
 		attachments
 	)
 
-	if config.DeleteInvokationOnAutoCleanUrls then
-		message:delete()
-	end
-
 	local deletionTime = os.time() + config.DeleteButtonExpirationTime
 	-- This will generate a 404 http error if the webhookMessage is deleted
 	Bot:ScheduleAction(deletionTime, function()
@@ -403,6 +399,11 @@ function Module:OnMessageCreate(message)
 			{ thread_id = threadId }
 		)
 	end)
+
+	-- Delete the original message *after* the webhook has been sent
+	if config.DeleteInvokationOnAutoCleanUrls then
+		message:delete()
+	end
 end
 
 ---@param guild Guild
