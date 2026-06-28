@@ -94,16 +94,20 @@ function Module:OnInteractionCreate(interaction)
 		return
 	end
 
+	local interactionType = interaction.data.custom_id
+	local custom_id_start_remove = 'nickname_remove_'
+	local custom_id_start_page = 'nickname_page_'
+
+	if not interactionType:startswith(custom_id_start_remove) and not interactionType:startswith(custom_id_start_page) then
+		return
+	end
+
 	local member = interaction.member
 	if not self:CheckRoles(member) then
 		return
 	end
 
 	local config = self:GetConfig(guild)
-
-	local interactionType = interaction.data.custom_id
-	local custom_id_start_remove = 'nickname_remove_'
-	local custom_id_start_page = 'nickname_page_'
 
 	local userList = self:BuildRenamedUserList(guild)
 
