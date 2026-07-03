@@ -8,6 +8,12 @@ local enums = discordia.enums
 
 local MAX_NUMBER_OF_EMBED_FIELDS = 25
 
+local applicationId
+client:onceSync("ready", function()
+	local info = client:getApplicationInformation()
+	applicationId = info and info.id or client.user.id
+end)
+
 function Bot:BuildUsage(commandTable)
 	local usage = {}
 	for k,v in ipairs(commandTable.Args) do
@@ -50,7 +56,8 @@ function Bot:ParseCommandArgs(member, expectedArgs, args)
 			values[argIndex] = nil
 			-- Do not increment argumentIndex, try to parse it again as the next parameter
 		else
-			return false, string.format("Invalid value for argument %d (%s)%s", argIndex, argData.Name, err and ": " .. err or "")
+			return false,
+				string.format("Invalid value for argument %d (%s)%s", argIndex, argData.Name, err and ": " .. err or "")
 		end
 	end
 
@@ -70,7 +77,11 @@ function Bot:RegisterCommand(values)
 		Name = name,
 		PrivilegeCheck = values.PrivilegeCheck,
 		Silent = values.Silent ~= nil and values.Silent,
-		BotAware = values.BotAware ~= nil and values.BotAware
+		BotAware = values.BotAware ~= nil and values.BotAware,
+		Slash = values.Slash,
+		ContextMenu = values.ContextMenu,
+		SlashFunc = values.Slash and values.Slash.Func or values.Func,
+		ContextMenuFunc = values.ContextMenu and values.ContextMenu.Func or values.Func
 	}
 
 	self.Commands[name] = command
@@ -78,6 +89,68 @@ end
 
 function Bot:UnregisterCommand(commandName)
 	self.Commands[commandName:lower()] = nil
+end
+
+Bot.ApplicationCommandIds = {}
+
+function Bot:SyncApplicationCommandsForGuild(guild, commandNames)
+	for _, name in ipairs(commandNames) do
+		local commandTable = self.Commands[name]
+		if (commandTable) then
+			if (commandTable.Slash) then
+				local options = {}
+				for _, argData in ipairs(commandTable.Args or {}) do
+					table.insert(options, {
+						name = argData.Name:lower(),
+						description = argData.Description or argData.Name,
+						type = self.ConfigTypeToCommandOptionType[argData.Type],
+						required = not argData.Optional
+					})
+				end
+				local description = commandTable.Slash.Description
+				if (type(commandTable.Help) == "function") then
+					description = description or commandTable.Help(guild)
+				else
+					description = description or commandTable.Help
+				end
+				local payload = {
+					name = name,
+					description = description,
+					type = 1,
+					options = #options > 0 and options or
+						nil
+				}
+				local cmd, err = client._api:createGuildApplicationCommand(applicationId, guild.id, payload)
+				if (cmd) then
+					self.ApplicationCommandIds[guild.id .. ":slash:" .. name] = cmd.id
+				else
+					self.Client:error("Failed to register slash command %s: %s", name, err)
+				end
+			end
+			if (commandTable.ContextMenu) then
+				local payload = { name = name, type = 2 }
+				local cmd, err = client._api:createGuildApplicationCommand(applicationId, guild.id, payload)
+				if (cmd) then
+					self.ApplicationCommandIds[guild.id .. ":context:" .. name] = cmd.id
+				else
+					self.Client:error("Failed to register context menu command %s: %s", name, err)
+				end
+			end
+		end
+	end
+end
+
+function Bot:UnsyncApplicationCommandsForGuild(guild, commandNames)
+	for _, name in ipairs(commandNames) do
+		for _, kind in ipairs({ "slash", "context" }) do
+			local key = guild.id .. ":" .. kind .. ":" .. name
+			local id = self.ApplicationCommandIds[key]
+			if (id) then
+				client._api:deleteGuildApplicationCommand(applicationId, guild.id, id)
+				self.ApplicationCommandIds[key] = nil
+			end
+		end
+	end
 end
 
 local prefixes = {
@@ -136,25 +209,29 @@ client:on('messageCreate', function(message)
 	end
 
 	if (commandTable.PrivilegeCheck) then
-	 	local success, ret = Bot:ProtectedCall("Command " .. commandName .. " privilege check", commandTable.PrivilegeCheck, message.member)
+		local success, ret = Bot:ProtectedCall("Command " .. commandName .. " privilege check",
+			commandTable.PrivilegeCheck, message.member)
 	 	if (not success) then
 	 		message:reply("An error occurred")
 	 		return
 	 	end
 
 	 	if (not ret) then
-			print(string.format("%s tried to use command %s on guild %s", message.author.tag, commandName, message.guild.name))
+			print(string.format("%s tried to use command %s on guild %s", message.author.tag, commandName,
+				message.guild.name))
 			return
 		end
 	end
 
-	local args, err = Bot:ParseCommandArgs(message.member, commandTable.Args, string.GetArguments(args, #commandTable.Args))
+	local args, err = Bot:ParseCommandArgs(message.member, commandTable.Args,
+		string.GetArguments(args, #commandTable.Args))
 	if (not args) then
 		message:reply(err)
 		return
 	end
 
-	Bot:ProtectedCall("Command " .. commandName, commandTable.Function, message, table.unpack(args, 1, #commandTable.Args))
+	Bot:ProtectedCall("Command " .. commandName, commandTable.Function, message,
+		table.unpack(args, 1, #commandTable.Args))
 
 	if (commandTable.Silent) then
 		message:delete()
@@ -167,7 +244,8 @@ local function getCommands(member)
 	for commandName, commandTable in pairs(Bot.Commands) do
 		local visible = true
 		if (commandTable.PrivilegeCheck) then
-			local success, ret = Bot:ProtectedCall("Command " .. commandName .. " privilege check", commandTable.PrivilegeCheck, member)
+			local success, ret = Bot:ProtectedCall("Command " .. commandName .. " privilege check",
+				commandTable.PrivilegeCheck, member)
 			if (not success or not ret) then
 				visible = false
 			end
@@ -189,7 +267,8 @@ local function getCommands(member)
 
 		table.insert(commandsFields, {
 			name = string.format("**Command: %s**", commandTable.Name),
-			value = string.format("**Description:** %s\n**Usage:** %s %s", helpStr, commandTable.Name, Bot:BuildUsage(commandTable))
+			value = string.format("**Description:** %s\n**Usage:** %s %s", helpStr, commandTable.Name,
+				Bot:BuildUsage(commandTable))
 		})
 	end
 
@@ -223,7 +302,65 @@ local function getHelpButtonsComponent(guild, selectedPage, nbPages)
 	return components
 end
 
+function Bot:DispatchApplicationCommand(interaction)
+	local guild = interaction.guild
+	if (not guild) then
+		return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "This command can only be used in a server.", flags = enums.interactionResponseFlag.ephemeral } })
+	end
+
+	local data = interaction.data
+	local commandTable = self.Commands[data.name:lower()]
+	if (not commandTable) then return end
+
+	local member = interaction.member
+	if (commandTable.PrivilegeCheck) then
+		local success, ret = self:ProtectedCall("Command " .. data.name .. " privilege check",
+			commandTable.PrivilegeCheck, member)
+		if (not success or not ret) then
+			return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "You are not authorized to use this command.", flags = enums.interactionResponseFlag.ephemeral } })
+		end
+	end
+
+	local args, func
+	if (data.target_id) then
+		local targetMember = guild:getMember(data.target_id)
+		if (not targetMember) then
+			return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "Target is not a member of this server.", flags = enums.interactionResponseFlag.ephemeral } })
+		end
+		args = { targetMember }
+		func = commandTable.ContextMenuFunc
+	else
+		local optionsByName = {}
+		for _, opt in ipairs(data.options or {}) do optionsByName[opt.name:lower()] = opt.value end
+
+		args = {}
+		for i, argData in ipairs(commandTable.Args) do
+			local raw = optionsByName[argData.Name:lower()]
+			if (raw == nil) then
+				if (not argData.Optional) then
+					return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "Missing required argument: " .. argData.Name, flags = enums.interactionResponseFlag.ephemeral } })
+				end
+			elseif (argData.Type == Bot.ConfigType.Member) then
+				args[i] = guild:getMember(raw)
+			elseif (argData.Type == Bot.ConfigType.User) then
+				args[i] = Bot:DecodeUser(raw)
+			elseif (argData.Type == Bot.ConfigType.Duration) then
+				args[i] = self.ConfigTypeParameter[Bot.ConfigType.Duration](tostring(raw), guild)
+			else
+				args[i] = raw
+			end
+		end
+		func = commandTable.SlashFunc
+	end
+
+	self:ProtectedCall("Command " .. data.name, func, interaction, table.unpack(args, 1, #commandTable.Args))
+end
+
 client:on("interactionCreate", function (interaction)
+	if (interaction.type == enums.interactionRequestType.applicationCommand) then
+		return Bot:DispatchApplicationCommand(interaction)
+	end
+
 	local guild = interaction.guild
 	if (not guild) then
 		return
@@ -231,7 +368,7 @@ client:on("interactionCreate", function (interaction)
 
 	local member = interaction.member
 	local interactionId = interaction.data.custom_id
-	if (not string.match(interactionId, "^help_button")) then
+	if (not interactionId or not string.match(interactionId, "^help_button")) then
 		return
 	end
 
@@ -285,14 +422,16 @@ Bot:RegisterCommand({
 			end
 
 			if (commandTable.PrivilegeCheck) then
-			 	local success, ret = Bot:ProtectedCall("Command " .. commandName .. " privilege check", commandTable.PrivilegeCheck, member)
+				local success, ret = Bot:ProtectedCall("Command " .. commandName .. " privilege check",
+					commandTable.PrivilegeCheck, member)
 			 	if (not success) then
 			 		message:reply("An error occurred")
 			 		return
 			 	end
 
 			 	if (not ret) then
-					print(string.format("%s tried to access command %s via help on guild %s", message.author.tag, commandName, guild.name))
+					print(string.format("%s tried to access command %s via help on guild %s", message.author.tag,
+						commandName, guild.name))
 					return
 				end
 			end
@@ -304,7 +443,8 @@ Bot:RegisterCommand({
 
 			table.insert(commandsFields, {
 					name = string.format("**Command: %s**", commandName),
-					value = string.format("**Description:** %s\n**Usage:** %s %s", helpStr, commandName, Bot:BuildUsage(commandTable))
+				value = string.format("**Description:** %s\n**Usage:** %s %s", helpStr, commandName,
+					Bot:BuildUsage(commandTable))
 			})
 		else
 			commandsFields = getCommands(member)

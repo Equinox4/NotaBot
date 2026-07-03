@@ -1,7 +1,6 @@
 -- Copyright (C) 2018 Jérôme Leclercq
 -- This file is part of the "Not a Bot" application
 -- For conditions of distribution and use, see copyright notice in LICENSE
-
 local discordia = require('discordia')
 local enums = discordia.enums
 local wrap = coroutine.wrap
@@ -270,6 +269,23 @@ Bot.ConfigTypeParser = {
 	end
 }
 
+Bot.ConfigTypeToCommandOptionType = {
+	[Bot.ConfigType.Boolean]  = enums.commandOptionType.boolean,
+	[Bot.ConfigType.Category] = enums.commandOptionType.channel,
+	[Bot.ConfigType.Channel]  = enums.commandOptionType.channel,
+	[Bot.ConfigType.Custom]   = enums.commandOptionType.string,
+	[Bot.ConfigType.Duration] = enums.commandOptionType.string,
+	[Bot.ConfigType.Emoji]    = enums.commandOptionType.string,
+	[Bot.ConfigType.Guild]    = enums.commandOptionType.string,
+	[Bot.ConfigType.Integer]  = enums.commandOptionType.integer,
+	[Bot.ConfigType.Member]   = enums.commandOptionType.user,
+	[Bot.ConfigType.Message]  = enums.commandOptionType.string,
+	[Bot.ConfigType.Number]   = enums.commandOptionType.number,
+	[Bot.ConfigType.Role]     = enums.commandOptionType.role,
+	[Bot.ConfigType.String]   = enums.commandOptionType.string,
+	[Bot.ConfigType.User]     = enums.commandOptionType.user,
+}
+
 client:onSync("ready", function ()
 	print("Logged in as " .. client.user.username)
 end)
@@ -290,7 +306,8 @@ function Bot:Save()
 	local stopwatch = discordia.Stopwatch()
 
 	for _, moduleTable in pairs(self.Modules) do
-		self:ProtectedCall(string.format("Module (%s) persistent data save", moduleTable.Name), moduleTable.SavePersistentData, moduleTable)
+		self:ProtectedCall(string.format("Module (%s) persistent data save", moduleTable.Name),
+			moduleTable.SavePersistentData, moduleTable)
 	end
 
 	client:info("Modules data saved (%.3fs)", stopwatch.milliseconds / 1000)
