@@ -139,6 +139,18 @@ function Bot:DecodeRole(guild, message)
 	return role
 end
 
+function Bot:ParseModalFields(interaction)
+	local fields = {}
+	for _, row in ipairs(interaction.data.components or {}) do
+		local component = row.components[1]
+		if (component) then
+			fields[component.custom_id] = component.value
+		end
+	end
+
+	return fields
+end
+
 function Bot:DecodeUser(message)
 	assert(message)
 
