@@ -70,6 +70,20 @@ function Bot:RegisterCommand(values)
 		error("Command \"" .. name .. " already exists")
 	end
 
+	local subcommands
+	if (values.Subcommands) then
+		subcommands = {}
+		for _, sub in ipairs(values.Subcommands) do
+			subcommands[sub.Name:lower()] = {
+				Name = sub.Name:lower(),
+				Description = sub.Description,
+				Args = sub.Args or {},
+				PrivilegeCheck = sub.PrivilegeCheck,
+				Func = sub.Func
+			}
+		end
+	end
+
 	local command = {
 		Args = values.Args,
 		Function = values.Func,
@@ -80,6 +94,7 @@ function Bot:RegisterCommand(values)
 		BotAware = values.BotAware ~= nil and values.BotAware,
 		Slash = values.Slash,
 		ContextMenu = values.ContextMenu,
+		Subcommands = subcommands,
 		SlashFunc = values.Slash and values.Slash.Func or values.Func,
 		ContextMenuFunc = values.ContextMenu and values.ContextMenu.Func or values.Func
 	}
@@ -93,21 +108,49 @@ end
 
 Bot.ApplicationCommandIds = {}
 
+local function buildOptionsFromArgs(argsList)
+	local options = {}
+	for _, argData in ipairs(argsList or {}) do
+		table.insert(options, {
+			name = argData.Name:lower(),
+			description = argData.Description or argData.Name,
+			type = Bot.ConfigTypeToCommandOptionType[argData.Type],
+			required = not argData.Optional,
+			autocomplete = argData.Autocomplete ~= nil or nil
+		})
+	end
+	return options
+end
+
 function Bot:SyncApplicationCommandsForGuild(guild, commandNames)
 	for _, name in ipairs(commandNames) do
 		local commandTable = self.Commands[name]
 		if (commandTable) then
-			if (commandTable.Slash) then
+			if (commandTable.Subcommands) then
 				local options = {}
-				for _, argData in ipairs(commandTable.Args or {}) do
+				for _, sub in pairs(commandTable.Subcommands) do
+					local subOptions = buildOptionsFromArgs(sub.Args)
 					table.insert(options, {
-						name = argData.Name:lower(),
-						description = argData.Description or argData.Name,
-						type = self.ConfigTypeToCommandOptionType[argData.Type],
-						required = not argData.Optional,
-						autocomplete = argData.Autocomplete ~= nil or nil
+						name = sub.Name,
+						description = sub.Description or sub.Name,
+						type = 1,
+						options = #subOptions > 0 and subOptions or nil
 					})
 				end
+				local payload = {
+					name = name,
+					description = type(commandTable.Help) == "function" and commandTable.Help(guild) or commandTable.Help or name,
+					type = 1,
+					options = options
+				}
+				local cmd, err = client._api:createGuildApplicationCommand(applicationId, guild.id, payload)
+				if (cmd) then
+					self.ApplicationCommandIds[guild.id .. ":slash:" .. name] = cmd.id
+				else
+					self.Client:error("Failed to register slash command %s: %s", name, err)
+				end
+			elseif (commandTable.Slash) then
+				local options = buildOptionsFromArgs(commandTable.Args)
 				local description = commandTable.Slash.Description
 				if (type(commandTable.Help) == "function") then
 					description = description or commandTable.Help(guild)
@@ -137,9 +180,9 @@ function Bot:SyncApplicationCommandsForGuild(guild, commandNames)
 					self.Client:error("Failed to register context menu command %s: %s", name, err)
 				end
 			end
-				end
-			end
 		end
+	end
+end
 
 function Bot:UnsyncApplicationCommandsForGuild(guild, commandNames)
 	for _, name in ipairs(commandNames) do
@@ -150,9 +193,9 @@ function Bot:UnsyncApplicationCommandsForGuild(guild, commandNames)
 				client._api:deleteGuildApplicationCommand(applicationId, guild.id, id)
 				self.ApplicationCommandIds[key] = nil
 			end
+				end
+			end
 		end
-	end
-end
 
 local prefixes = {
 	function(content, guild)
@@ -293,6 +336,34 @@ local function getHelpButtonsComponent(guild, selectedPage, nbPages)
 	return components
 end
 
+local function resolveArgsFromOptions(guild, argsList, options)
+	local optionsByName = {}
+	for _, opt in ipairs(options or {}) do optionsByName[opt.name:lower()] = opt.value end
+
+	local args = {}
+	for i, argData in ipairs(argsList) do
+		local raw = optionsByName[argData.Name:lower()]
+		if (raw == nil) then
+			if (not argData.Optional) then
+				return nil, "Missing required argument: " .. argData.Name
+			end
+		elseif (argData.Type == Bot.ConfigType.Member) then
+			args[i] = guild:getMember(raw)
+		elseif (argData.Type == Bot.ConfigType.User) then
+			args[i] = Bot:DecodeUser(raw)
+		elseif (argData.Type == Bot.ConfigType.Duration) then
+			args[i] = Bot.ConfigTypeParameter[Bot.ConfigType.Duration](tostring(raw), guild)
+		elseif (argData.Type == Bot.ConfigType.Channel or argData.Type == Bot.ConfigType.Category) then
+			args[i] = guild:getChannel(raw)
+		elseif (argData.Type == Bot.ConfigType.Role) then
+			args[i] = guild:getRole(raw)
+		else
+			args[i] = raw
+		end
+	end
+	return args
+end
+
 function Bot:DispatchApplicationCommand(interaction)
 	local guild = interaction.guild
 	if (not guild) then
@@ -312,6 +383,27 @@ function Bot:DispatchApplicationCommand(interaction)
 		end
 	end
 
+	if (commandTable.Subcommands) then
+		local subOption = data.options and data.options[1]
+		local sub = subOption and commandTable.Subcommands[subOption.name:lower()]
+		if (not sub) then return end
+
+		if (sub.PrivilegeCheck) then
+			local success, ret = self:ProtectedCall("Command " .. data.name .. " " .. sub.Name .. " privilege check",
+				sub.PrivilegeCheck, member)
+			if (not success or not ret) then
+				return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "You are not authorized to use this command.", flags = enums.interactionResponseFlag.ephemeral } })
+			end
+		end
+
+		local args, err = resolveArgsFromOptions(guild, sub.Args, subOption.options)
+		if (not args) then
+			return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = err, flags = enums.interactionResponseFlag.ephemeral } })
+		end
+
+		return self:ProtectedCall("Command " .. data.name .. " " .. sub.Name, sub.Func, interaction, table.unpack(args, 1, #sub.Args))
+	end
+
 	local args, func
 	if (data.target_id) then
 		local targetMember = guild:getMember(data.target_id)
@@ -321,25 +413,10 @@ function Bot:DispatchApplicationCommand(interaction)
 		args = { targetMember }
 		func = commandTable.ContextMenuFunc
 	else
-		local optionsByName = {}
-		for _, opt in ipairs(data.options or {}) do optionsByName[opt.name:lower()] = opt.value end
-
-		args = {}
-		for i, argData in ipairs(commandTable.Args) do
-			local raw = optionsByName[argData.Name:lower()]
-			if (raw == nil) then
-				if (not argData.Optional) then
-					return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "Missing required argument: " .. argData.Name, flags = enums.interactionResponseFlag.ephemeral } })
-				end
-			elseif (argData.Type == Bot.ConfigType.Member) then
-				args[i] = guild:getMember(raw)
-			elseif (argData.Type == Bot.ConfigType.User) then
-				args[i] = Bot:DecodeUser(raw)
-			elseif (argData.Type == Bot.ConfigType.Duration) then
-				args[i] = self.ConfigTypeParameter[Bot.ConfigType.Duration](tostring(raw), guild)
-			else
-				args[i] = raw
-			end
+		local err
+		args, err = resolveArgsFromOptions(guild, commandTable.Args, data.options)
+		if (not args) then
+			return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = err, flags = enums.interactionResponseFlag.ephemeral } })
 		end
 		func = commandTable.SlashFunc
 	end

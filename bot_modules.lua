@@ -423,7 +423,7 @@ function ModuleMetatable:RegisterCommand(values)
 
 	table.insert(self._Commands, values.Name)
 
-	if (values.Slash or values.ContextMenu) then
+	if (values.Slash or values.ContextMenu or values.Subcommands) then
 		print("Application commands found")
 		self._ApplicationCommands = self._ApplicationCommands or {}
 		table.insert(self._ApplicationCommands, values.Name)
