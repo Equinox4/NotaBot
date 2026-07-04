@@ -96,7 +96,7 @@ function Module:OnLoaded()
 	self:RegisterCommand({
 		Name = "prune",
 		Args = {
-			{ Name = "count", Type = Bot.ConfigType.Integer, Description = "Number of recent messages to delete" }
+			{ Name = "nbOfMessages", Type = Bot.ConfigType.Integer, Description = "Number of recent messages to delete" }
 		},
 		PrivilegeCheck = hasManagePermission,
 		Help = function (guild) return Bot:Format(guild, "PRUNE_HELP") end,
@@ -135,7 +135,7 @@ function Module:OnLoaded()
 	self:RegisterCommand({
 		Name = "prunefrom",
 		Args = {
-			{ Name = "<messageId>", Type = Bot.ConfigType.Message }
+			{ Name = "messageId", Type = Bot.ConfigType.Message }
 		},
 		PrivilegeCheck = hasManagePermission,
 		Help = function (guild) return Bot:Format(guild, "PRUNEFROM_HELP") end,
