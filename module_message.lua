@@ -1075,7 +1075,7 @@ function Module:OnLoaded()
 			}
 		},
 
-		Help = "Sends a canned reply, or lists them with \"list\"",
+		Help = "Sends a predefined reply, or lists them with \"list\"",
 		Func = function (commandMessage, name)
 			if (name:lower() == "list") then
 				commandMessage:reply(self:BuildReplyListText(commandMessage.guild))
@@ -1092,7 +1092,7 @@ function Module:OnLoaded()
 			commandMessage:reply(reply)
 		end,
 		Slash = {
-			Description = "Send a canned reply, or list them with \"list\"",
+			Description = "Send a predefined reply, or list them with \"list\"",
 			Func = function (interaction, name)
 				if (name:lower() == "list") then
 					return interaction:respond({
@@ -1220,7 +1220,7 @@ function Module:OnLoaded()
 				-- Don't allow everyone to bypass limit and get all messages (would require a lot of API calls)
 				if limit > 1000 then
 					commandMessage:reply(
-						"Only bot owner can ask to retrieve more than 1000+ messages at once, due to the number of API calls required to fetch messages"
+						"Only the bot owner can request to retrieve more than 1,000 messages at a time, due to the number of API calls required to fetch the messages."
 					)
 					return
 				end
@@ -1257,7 +1257,7 @@ function Module:OnLoaded()
 			local jsonSave = json.encode(messageData, { indent = 1 })
 			commandMessage:reply({
 				content = string.format(
-					"%d message(s) of channel %s have been saved to following file", #messages,
+					"%d message(s) from the %s channel were saved to the following file", #messages,
 					targetChannel.mentionString
 				),
 				file = {

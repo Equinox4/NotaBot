@@ -20,11 +20,11 @@ The bot reads its config from `config.lua`, which is git-ignored (don't commit y
    - `Token` — your Discord bot token, from the [Discord Developer Portal](https://discord.com/developers/applications) (Bot tab > Reset/Copy Token).
    - `OwnerUserId` — your Discord user ID (enable Developer Mode in Discord, right-click your name, "Copy ID").
 
-For development, create a separate test bot application in the Discord Developer Portal and invite it to a private test server. Use that bot's token in your local `config.lua` so you don't run code against the production bot/server.
+For development, create a separate test bot application on the Discord Developer Portal and invite it to a private test server. Use this bot's token in your local `config.lua` file to ensure that no code runs on the production bot or server.
 
 ### Gateway intents
 
-The bot requests all gateway intents except `guildIntegrations` (see `bot.lua`). Two of these are privileged and must be enabled manually in the Developer Portal (Bot tab) for your application, or the bot will fail to connect:
+The bot requires all gateway intents except for `guildIntegrations` (see `bot.lua`). Two of these are privileged and must be enabled manually on the Developer Portal (under the "Bot" tab) for your application, or the bot won't work:
 
 - **Server Members Intent** (`guildMembers`)
 - **Presence Intent** (`guildPresences`)
