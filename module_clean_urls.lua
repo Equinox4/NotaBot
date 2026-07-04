@@ -2,7 +2,6 @@ local bot = Bot
 local client = Client
 ---@type discordia
 local discordia = Discordia
-local prefix = Config.Prefix
 local enums = discordia.enums
 local http = require("coro-http")
 local linkShorteners = require("./data_linkshorteners")
@@ -537,7 +536,7 @@ function Module:CleanMessage(message, config, data)
         return
     end
 
-    if (message.content:startswith(prefix, true)) then
+    if (message.content:startswith(bot:GetGuildPrefix(message.guild), true)) then
         return
     end
     if message.content:find("http[s]?://") then
@@ -661,8 +660,12 @@ end
 
 ---@param interaction Interaction
 function Module:OnInteractionCreate(interaction)
+    if (interaction.type ~= enums.interactionRequestType.messageComponent) then
+        return
+    end
+
     local customId = interaction.data.custom_id
-    local guild = interaction.guildP
+    local guild = interaction.guild
 
     if not customId:startswith("clean_url_delete_") then
         return

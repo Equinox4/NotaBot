@@ -170,6 +170,21 @@ function Bot:DecodeUser(message)
 	return user
 end
 
+function Bot:GetGuildPrefix(guild)
+	local prefix = Config.Prefix
+	if (guild) then
+		local serverconfig = self:GetModuleForGuild(guild, "serverconfig")
+		if (serverconfig) then
+			local config = serverconfig:GetConfig(guild)
+			if (config and config.Prefix) then
+				prefix = config.Prefix
+			end
+		end
+	end
+
+	return prefix or "!"
+end
+
 function Bot:GenerateMessageLink(message)
 	local guildId = message.guild and message.guild.id or "@me"
 	return string.format("https://discord.com/channels/%s/%s/%s", guildId, message.channel.id, message.id)

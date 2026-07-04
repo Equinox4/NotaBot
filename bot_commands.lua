@@ -104,7 +104,8 @@ function Bot:SyncApplicationCommandsForGuild(guild, commandNames)
 						name = argData.Name:lower(),
 						description = argData.Description or argData.Name,
 						type = self.ConfigTypeToCommandOptionType[argData.Type],
-						required = not argData.Optional
+						required = not argData.Optional,
+						autocomplete = argData.Autocomplete ~= nil or nil
 					})
 				end
 				local description = commandTable.Slash.Description
@@ -136,9 +137,9 @@ function Bot:SyncApplicationCommandsForGuild(guild, commandNames)
 					self.Client:error("Failed to register context menu command %s: %s", name, err)
 				end
 			end
+				end
+			end
 		end
-	end
-end
 
 function Bot:UnsyncApplicationCommandsForGuild(guild, commandNames)
 	for _, name in ipairs(commandNames) do
@@ -154,18 +155,8 @@ function Bot:UnsyncApplicationCommandsForGuild(guild, commandNames)
 end
 
 local prefixes = {
-	function (content, guild)
-		local prefix = Config.Prefix
-		if guild then
-			local serverconfig = Bot:GetModuleForGuild(guild, "serverconfig")
-			if serverconfig then
-				local config = serverconfig:GetConfig(guild)
-				if config then
-					prefix = config.Prefix
-				end
-			end
-		end
-
+	function(content, guild)
+		local prefix = Bot:GetGuildPrefix(guild)
 		return content:startswith(prefix, true) and content:sub(#prefix + 1) or nil
 	end,
 	function (content)
@@ -356,9 +347,55 @@ function Bot:DispatchApplicationCommand(interaction)
 	self:ProtectedCall("Command " .. data.name, func, interaction, table.unpack(args, 1, #commandTable.Args))
 end
 
+function Bot:DispatchApplicationCommandAutocomplete(interaction)
+	local guild = interaction.guild
+	local data = interaction.data
+	local commandTable = self.Commands[data.name:lower()]
+
+	local focused
+	for _, opt in ipairs(data.options or {}) do
+		if (opt.focused) then
+			focused = opt
+		end
+	end
+
+	local choices = {}
+	if (guild and commandTable and focused) then
+		local argData
+		for _, a in ipairs(commandTable.Args or {}) do
+			if (a.Name:lower() == focused.name:lower()) then
+				argData = a
+				break
+			end
+		end
+
+		if (argData and argData.Autocomplete) then
+			local success, ret = self:ProtectedCall("Autocomplete " .. data.name, argData.Autocomplete, guild,
+				interaction.member, focused.value or "")
+			if (success and type(ret) == "table") then
+				choices = ret
+				if (#choices > 25) then
+					local clipped = {}
+					for i = 1, 25 do clipped[i] = choices[i] end
+					choices = clipped
+				end
+			end
+		end
+	end
+
+	interaction:respond({
+		type = enums.interactionResponseType.applicationCommandAutocompleteResult,
+		data = { choices = choices }
+	})
+end
+
 client:on("interactionCreate", function (interaction)
 	if (interaction.type == enums.interactionRequestType.applicationCommand) then
 		return Bot:DispatchApplicationCommand(interaction)
+	end
+
+	if (interaction.type == enums.interactionRequestType.applicationCommandAutocomplete) then
+		return Bot:DispatchApplicationCommandAutocomplete(interaction)
 	end
 
 	local guild = interaction.guild

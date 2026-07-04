@@ -89,6 +89,10 @@ function Module:HasHighestRolesThanTarget(user, target)
 end
 
 function Module:OnInteractionCreate(interaction)
+	if (interaction.type ~= enums.interactionRequestType.messageComponent) then
+		return
+	end
+
 	local guild = interaction.guild
 	if not guild then
 		return
