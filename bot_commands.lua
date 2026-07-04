@@ -172,7 +172,8 @@ function Bot:SyncApplicationCommandsForGuild(guild, commandNames)
 				end
 			end
 			if (commandTable.ContextMenu) then
-				local payload = { name = name, type = 2 }
+				local menuType = commandTable.ContextMenu.Type == "message" and 3 or 2
+				local payload = { name = name, type = menuType }
 				local cmd, err = client._api:createGuildApplicationCommand(applicationId, guild.id, payload)
 				if (cmd) then
 					self.ApplicationCommandIds[guild.id .. ":context:" .. name] = cmd.id
@@ -406,11 +407,19 @@ function Bot:DispatchApplicationCommand(interaction)
 
 	local args, func
 	if (data.target_id) then
-		local targetMember = guild:getMember(data.target_id)
-		if (not targetMember) then
-			return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "Target is not a member of this server.", flags = enums.interactionResponseFlag.ephemeral } })
+		if (commandTable.ContextMenu and commandTable.ContextMenu.Type == "message") then
+			local targetMessage = interaction.channel and interaction.channel:getMessage(data.target_id)
+			if (not targetMessage) then
+				return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "Target message not found.", flags = enums.interactionResponseFlag.ephemeral } })
+			end
+			args = { targetMessage }
+		else
+			local targetMember = guild:getMember(data.target_id)
+			if (not targetMember) then
+				return interaction:respond({ type = enums.interactionResponseType.channelMessageWithSource, data = { content = "Target is not a member of this server.", flags = enums.interactionResponseFlag.ephemeral } })
+			end
+			args = { targetMember }
 		end
-		args = { targetMember }
 		func = commandTable.ContextMenuFunc
 	else
 		local err
