@@ -15,6 +15,17 @@ local NB_MSG_MAX_LIMIT  = 100
 
 Module.Name = "prune"
 
+function Module:GetConfigTable()
+	return {
+		{
+			Name = "Silent",
+			Description = "Delete the command message used to invoke prunefrom",
+			Type = Bot.ConfigType.Boolean,
+			Default = true
+		}
+	}
+end
+
 local function bulkDeleteChunks(channel, messagesChunks)
 	local nbDeletedMessages = 0
 
@@ -139,10 +150,10 @@ function Module:OnLoaded()
 		},
 		PrivilegeCheck = hasManagePermission,
 		Help = function (guild) return Bot:Format(guild, "PRUNEFROM_HELP") end,
-		Silent = true,
 		Func = function (commandMessage, targetMessage)
 			local guild = commandMessage.guild
-			local nbDeletedMessages = self:bulkDeleteById(commandMessage.channel, targetMessage, true)
+			local config = self:GetConfig(guild)
+			local nbDeletedMessages = self:bulkDeleteById(commandMessage.channel, targetMessage, config.Silent)
 
 			local response = ""
 			if not hasValidDate(targetMessage) then

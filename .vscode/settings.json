@@ -1,5 +1,5 @@
 {
   "Lua.diagnostics.globals": ["Client", "Discordia", "Module", "discordia"],
   "Lua.runtime.version": "LuaJIT",
-  "editor.formatOnSave": true,
+  "editor.formatOnSave": false
 }
