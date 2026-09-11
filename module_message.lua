@@ -1341,6 +1341,11 @@ function Module:OnMessageDeleteUncached(channel, messageId)
 end
 
 function Module:OnInteractionCreate(interaction)
+	if not interaction.message then
+		-- Not a message interaction
+		return
+	end
+
 	local guild = interaction.guild
 	if not guild then
 		return
